@@ -1,0 +1,996 @@
+    fi
+    ;;
+esac
+
+brew_is_installed() {
+  brew list -1 | grep -Fqx "$1"
+}
+
+tap_is_installed() {
+  brew tap | grep -Fqx "$1"
+}
+
+# Main Execution
+laptop_script_url="https://raw.githubusercontent.com/cisagov/laptop/master/laptop"
+
+append_to_shell_file "# Added by cisagov laptop script"
+append_to_shell_file "alias laptop='bash <(curl -s $laptop_script_url)'"
+# shellcheck disable=SC2016
+append_to_shell_file 'export PATH="$HOME/.bin:$PATH"'
+
+# Install Homebrew
+if ! command -v brew >/dev/null; then
+  fancy_echo "Installing Homebrew ..."
+  /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/master/install.sh)"
+
+  # shellcheck disable=SC2016
+  append_to_shell_file 'export PATH="/usr/local/bin:$PATH"'
+else
+  fancy_echo "Homebrew already installed. Skipping ..."
+fi
+
+# Update Homebrew
+fancy_echo "Updating Homebrew..."
+brew update
+
+# Verify Homebrew installation
+fancy_echo "Verifying the Homebrew installation..."
+if brew doctor; then
+  fancy_echo "Your Homebrew installation is good to go."
+else
+  fancy_echo "Your Homebrew installation reported some errors or warnings."
+  echo "If the warnings are related to Python, you can ignore them."
+  echo "Otherwise, review the Homebrew messages to see if any action is needed."
+fi
+
+# Install from Brewfile
+fancy_echo "Installing formulas and casks from the Brewfile ..."
+if brew bundle --file="$HOME/Brewfile"; then
+  fancy_echo "All formulas and casks were installed successfully."
+else
+  fancy_echo "Some formulas or casks failed to install."
+  echo "This is usually due to one of the Mac apps being already installed,"
+  echo "in which case, you can ignore these errors."
+fi
+
+# Install MIT kerberos via Brew
+if ! brew_is_installed "krb5"; then
+  fancy_echo "Installing MIT Kerberos"
+  brew install krb5
+  # shellcheck disable=SC2016
+  append_to_shell_file 'export PATH="/usr/local/opt/krb5/bin:/usr/local/opt/krb5/sbin:$PATH"'
+else
+  fancy_echo "MIT Kerberos already installed"
+fi
+
+# Install Node/NVM
+fancy_echo 'Checking on Node.js installation...'
+
+if ! brew_is_installed "node"; then
+  if command -v n > /dev/null; then
+    fancy_echo "We recommend using \`nvm\` and not \`n\`."
+    fancy_echo "See https://pages.18f.gov/frontend/#install-npm"
+  elif ! command -v nvm > /dev/null; then
+    fancy_echo 'Installing nvm and lts Node.js and npm...'
+    curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.35.3/install.sh | bash
+    export NVM_DIR="$HOME/.nvm"
+    # shellcheck source=/dev/null
+    [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
+    # nvm is a bash script itself, some commands of which may fail WITHOUT
+    # causing the whole operation to fail. To accomdate that, disable exit on
+    # any nonzero exit code while nvm runs.
+    set +e
+
+    nvm install --lts
+
+    # Turn it back on when nvm is done, since the rest of this script may have
+    # been written assuming this behavior.
+    set -e
+  else
+    fancy_echo 'version manager detected.  Skipping...'
+  fi
+else
+  brew bundle --file=- <<EOF
+  brew 'node'
+EOF
+fi
+
+fancy_echo '...Finished Node.js installation checks.'
+
+# Install and set up Python
+fancy_echo 'Checking on Python installation...'
+
+if ! brew_is_installed "python3"; then
+  brew bundle --file=- <<EOF
+  brew 'zlib'
+  brew 'pyenv'
+  brew 'pyenv-virtualenv'
+  brew 'pyenv-virtualenvwrapper'
+EOF
+  # shellcheck disable=SC2016
+  append_to_shell_file 'if which pyenv > /dev/null; then eval "$(pyenv init -)"; fi'
+  # shellcheck disable=SC2016
+  append_to_shell_file 'if which pyenv-virtualenv-init > /dev/null; then eval "$(pyenv virtualenv-init -)"; fi'
+
+  # pyenv currently doesn't have a convenience version to use, e.g., "latest",
+  # so we check for the latest version against Homebrew instead.
+  latest_python_3="$(brew info python3 | grep -E -o "3\.\d+\.\d+" | head -1)"
+
+  if ! pyenv versions | ag "$latest_python_3" > /dev/null; then
+    # Starting with macOS 10.14 (Mojave), the header files for system libraries
+    # have been moved. Rather than hack the header paths based on OS version,
+    # just install zlib with brew and build against that directly for now.
+    brew install zlib
+    export LDFLAGS="-L/usr/local/opt/zlib/lib"
+    export CPPFLAGS="-I/usr/local/opt/zlib/include"
+    pyenv install "$latest_python_3"
+    pyenv global "$latest_python_3"
+    pyenv rehash
+  fi
+else
+  brew bundle --file=- <<EOF
+  brew 'python3'
+EOF
+fi
+
+if ! brew_is_installed "pyenv-virtualenvwrapper"; then
+  if ! pip3 list | ag "virtualenvwrapper" > /dev/null; then
+    fancy_echo 'Installing virtualenvwrapper...'
+    pip3 install virtualenvwrapper
+    append_to_shell_file 'export VIRTUALENVWRAPPER_PYTHON=/usr/local/bin/python3'
+    append_to_shell_file 'export VIRTUALENVWRAPPER_VIRTUALENV=/usr/local/bin/virtualenv'
+    append_to_shell_file 'source /usr/local/bin/virtualenvwrapper.sh'
+  fi
+fi
+
+fancy_echo "Install pre-commit hooks for linters and black"
+pip3 install pre-commit flake8 flake8-docstrings black
+
+fancy_echo '...Finished Python installation checks.'
+
+if [ -f "$HOME/.laptop.local" ]; then
+  # shellcheck source=/dev/null
+  . "$HOME/.laptop.local"
+fi
+
+fancy_echo 'All done!'
+ bm@BMs-MacBook-Pro  ~ 
+ bm@BMs-MacBook-Pro  ~  ls
+Applications   Brewfile       Brewfile.local Desktop        Documents      Downloads      Library        Movies         Music          Pictures       Public         gandi.key      laptop.log     mac            repos
+ bm@BMs-MacBook-Pro  ~  vim Brewfile
+ bm@BMs-MacBook-Pro  ~  vim Brewfile.local
+ bm@BMs-MacBook-Pro  ~  cat laptop.log
+
+Homebrew already installed. Skipping ...
+
+Updating Homebrew...
+Already up-to-date.
+
+Verifying the Homebrew installation...
+Please note that these warnings are just used to help the Homebrew maintainers
+with debugging if you file an issue. If everything you use Homebrew for is
+working fine: please don't worry or file an issue; just ignore this. Thanks!
+
+Warning: A newer Command Line Tools release is available.
+Update them from Software Update in System Preferences or run:
+  softwareupdate --all --install --force
+
+If that doesn't show you any updates, run:
+  sudo rm -rf /Library/Developer/CommandLineTools
+  sudo xcode-select --install
+
+Alternatively, manually download them from:
+  https://developer.apple.com/download/all/.
+You should download the Command Line Tools for Xcode 13.1.
+
+
+Your Homebrew installation reported some errors or warnings.
+If the warnings are related to Python, you can ignore them.
+Otherwise, review the Homebrew messages to see if any action is needed.
+
+Installing formulas and casks from the Brewfile ...
+==> Tapping homebrew/bundle
+Cloning into '/opt/homebrew/Library/Taps/homebrew/homebrew-bundle'...
+Tapped 1 command (98 files, 1.9MB).
+Installing git
+Installing libgit2
+Installing awscli
+Installing coreutils
+Installing figlet
+Installing gnu-sed
+Installing gpg
+Installing gnupg
+Installing jq
+Installing ncurses
+Installing openssl
+Installing packer
+Installing pcre2
+Installing pinentry
+Installing pinentry-mac
+Installing readline
+Installing s3cmd
+Installing sqlite
+Installing stow
+Installing terraform
+Installing watch
+Installing wget
+Installing wireshark
+Installing xz
+Installing shellcheck
+Installing bash-completion
+Installing zsh-syntax-highlighting
+Installing the_silver_searcher
+Tapping homebrew/services
+Installing chromedriver
+Installing docker
+==> Downloading https://desktop.docker.com/mac/main/arm64/73305/Docker.dmg
+==> Installing Cask docker
+Error: It seems there is already an App at '/Applications/Docker.app'.
+==> Purging files for version 4.4.2,73305 of Cask docker
+Installing docker has failed!
+Tapping liamg/tfsec
+Installing liamg/tfsec/tfsec
+Homebrew Bundle failed! 1 Brewfile dependency failed to install.
+
+Some formulas or casks failed to install.
+This is usually due to one of the Mac apps being already installed,
+in which case, you can ignore these errors.
+
+Installing MIT Kerberos
+==> Downloading https://ghcr.io/v2/homebrew/core/krb5/manifests/1.19.2
+==> Downloading https://ghcr.io/v2/homebrew/core/krb5/blobs/sha256:0dd1072480422dc447c27e560e6e09afc095d93f5edb0ca2b46183a972f8cab0
+==> Downloading from https://pkg-containers.githubusercontent.com/ghcr1/blobs/sha256:0dd1072480422dc447c27e560e6e09afc095d93f5edb0ca2b46183a972f8cab0?se=2022-02-02T02%3A30%3A00Z&sig=u65krfZFvGSkWsnkgt%2BD%2B2XR3dV1rCGy7w5ZkU4CEec%3D&sp=r&spr=https&sr=b&sv=2019-12-12
+==> Pouring krb5--1.19.2.arm64_monterey.bottle.tar.gz
+==> Caveats
+krb5 is keg-only, which means it was not symlinked into /opt/homebrew,
+because macOS already provides this software and installing another version in
+parallel can cause all kinds of trouble.
+
+If you need to have krb5 first in your PATH, run:
+  echo 'export PATH="/opt/homebrew/opt/krb5/bin:$PATH"' >> ~/.zshrc
+  echo 'export PATH="/opt/homebrew/opt/krb5/sbin:$PATH"' >> ~/.zshrc
+
+For compilers to find krb5 you may need to set:
+  export LDFLAGS="-L/opt/homebrew/opt/krb5/lib"
+  export CPPFLAGS="-I/opt/homebrew/opt/krb5/include"
+
+For pkg-config to find krb5 you may need to set:
+  export PKG_CONFIG_PATH="/opt/homebrew/opt/krb5/lib/pkgconfig"
+
+==> Summary
+🍺  /opt/homebrew/Cellar/krb5/1.19.2: 162 files, 5.6MB
+==> Running `brew cleanup krb5`...
+Disable this behaviour by setting HOMEBREW_NO_INSTALL_CLEANUP.
+Hide these hints with HOMEBREW_NO_ENV_HINTS (see `man brew`).
+
+Checking on Node.js installation...
+
+Installing nvm and lts Node.js and npm...
+  % Total    % Received % Xferd  Average Speed   Time    Time     Time  Current
+                                 Dload  Upload   Total   Spent    Left  Speed
+100 13527  100 13527    0     0  78999      0 --:--:-- --:--:-- --:--:-- 80517
+=> Downloading nvm from git to '/Users/bm/.nvm'
+=> Cloning into '/Users/bm/.nvm'...
+=> Compressing and cleaning up git repository
+
+=> Appending nvm source string to /Users/bm/.zshrc
+=> Appending bash_completion source string to /Users/bm/.zshrc
+=> Close and reopen your terminal to start using nvm or run the following to use it now:
+
+export NVM_DIR="$HOME/.nvm"
+[ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"  # This loads nvm
+[ -s "$NVM_DIR/bash_completion" ] && \. "$NVM_DIR/bash_completion"  # This loads nvm bash_completion
+Installing latest LTS version.
+Downloading and installing node v16.13.2...
+Downloading https://nodejs.org/dist/v16.13.2/node-v16.13.2-darwin-arm64.tar.xz...
+########################################################################################################################### 100.0%
+Computing checksum with sha256sum
+Checksums matched!
+Now using node v16.13.2 (npm v8.1.2)
+Creating default alias: default -> lts/* (-> v16.13.2)
+
+...Finished Node.js installation checks.
+
+Checking on Python installation...
+Installing zlib
+Installing pyenv
+Installing pyenv-virtualenv
+Installing pyenv-virtualenvwrapper
+Homebrew Bundle complete! 4 Brewfile dependencies now installed.
+Warning: zlib 1.2.11 is already installed and up-to-date.
+To reinstall 1.2.11, run:
+  brew reinstall zlib
+python-build: use openssl@1.1 from homebrew
+python-build: use readline from homebrew
+Downloading Python-3.9.10.tar.xz...
+-> https://www.python.org/ftp/python/3.9.10/Python-3.9.10.tar.xz
+Installing Python-3.9.10...
+python-build: use readline from homebrew
+python-build: use zlib from xcode sdk
+Installed Python-3.9.10 to /Users/bm/.pyenv/versions/3.9.10
+
+Error: Failure while executing; `ls -1 /opt/homebrew/Caskroom` was terminated by uncaught signal PIPE.
+
+Install pre-commit hooks for linters and black
+DEPRECATION: Configuring installation scheme with distutils config files is deprecated and will no longer work in the near future. If you are using a Homebrew or Linuxbrew Python, please see discussion at https://github.com/Homebrew/homebrew-core/issues/76621
+Collecting pre-commit
+  Downloading pre_commit-2.17.0-py2.py3-none-any.whl (195 kB)
+Collecting flake8
+  Downloading flake8-4.0.1-py2.py3-none-any.whl (64 kB)
+Collecting flake8-docstrings
+  Downloading flake8_docstrings-1.6.0-py2.py3-none-any.whl (5.7 kB)
+Collecting black
+  Downloading black-22.1.0-cp39-cp39-macosx_11_0_arm64.whl (1.2 MB)
+Collecting cfgv>=2.0.0
+  Downloading cfgv-3.3.1-py2.py3-none-any.whl (7.3 kB)
+Collecting identify>=1.0.0
+  Downloading identify-2.4.7-py2.py3-none-any.whl (98 kB)
+Collecting virtualenv>=20.0.8
+  Downloading virtualenv-20.13.0-py2.py3-none-any.whl (6.5 MB)
+Collecting toml
+  Downloading toml-0.10.2-py2.py3-none-any.whl (16 kB)
+Collecting pyyaml>=5.1
+  Downloading PyYAML-6.0-cp39-cp39-macosx_11_0_arm64.whl (173 kB)
+Collecting nodeenv>=0.11.1
+  Downloading nodeenv-1.6.0-py2.py3-none-any.whl (21 kB)
+Collecting pyflakes<2.5.0,>=2.4.0
+  Downloading pyflakes-2.4.0-py2.py3-none-any.whl (69 kB)
+Collecting pycodestyle<2.9.0,>=2.8.0
+  Downloading pycodestyle-2.8.0-py2.py3-none-any.whl (42 kB)
+Collecting mccabe<0.7.0,>=0.6.0
+  Downloading mccabe-0.6.1-py2.py3-none-any.whl (8.6 kB)
+Collecting pydocstyle>=2.1
+  Downloading pydocstyle-6.1.1-py3-none-any.whl (37 kB)
+Collecting mypy-extensions>=0.4.3
+  Downloading mypy_extensions-0.4.3-py2.py3-none-any.whl (4.5 kB)
+Collecting typing-extensions>=3.10.0.0
+  Downloading typing_extensions-4.0.1-py3-none-any.whl (22 kB)
+Collecting tomli>=1.1.0
+  Downloading tomli-2.0.0-py3-none-any.whl (12 kB)
+Collecting platformdirs>=2
+  Downloading platformdirs-2.4.1-py3-none-any.whl (14 kB)
+Collecting pathspec>=0.9.0
+  Downloading pathspec-0.9.0-py2.py3-none-any.whl (31 kB)
+Collecting click>=8.0.0
+  Downloading click-8.0.3-py3-none-any.whl (97 kB)
+Collecting snowballstemmer
+  Downloading snowballstemmer-2.2.0-py2.py3-none-any.whl (93 kB)
+Requirement already satisfied: six<2,>=1.9.0 in /opt/homebrew/lib/python3.9/site-packages (from virtualenv>=20.0.8->pre-commit) (1.16.0)
+Collecting filelock<4,>=3.2
+  Downloading filelock-3.4.2-py3-none-any.whl (9.9 kB)
+Collecting distlib<1,>=0.3.1
+  Downloading distlib-0.3.4-py2.py3-none-any.whl (461 kB)
+Installing collected packages: snowballstemmer, pyflakes, pycodestyle, platformdirs, mccabe, filelock, distlib, virtualenv, typing-extensions, tomli, toml, pyyaml, pydocstyle, pathspec, nodeenv, mypy-extensions, identify, flake8, click, cfgv, pre-commit, flake8-docstrings, black
+  DEPRECATION: Configuring installation scheme with distutils config files is deprecated and will no longer work in the near future. If you are using a Homebrew or Linuxbrew Python, please see discussion at https://github.com/Homebrew/homebrew-core/issues/76621
+  DEPRECATION: Configuring installation scheme with distutils config files is deprecated and will no longer work in the near future. If you are using a Homebrew or Linuxbrew Python, please see discussion at https://github.com/Homebrew/homebrew-core/issues/76621
+  DEPRECATION: Configuring installation scheme with distutils config files is deprecated and will no longer work in the near future. If you are using a Homebrew or Linuxbrew Python, please see discussion at https://github.com/Homebrew/homebrew-
+# Added by cisagov laptop script
+################################
+alias laptop='bash <(curl -s https://raw.githubusercontent.com/cisagov/laptop/master/laptop)'
+
+export PATH="$HOME/.bin:$PATH"
+
+export PATH="/usr/local/bin:$PATH"
+
+export PATH="/usr/local/opt/krb5/bin:/usr/local/opt/krb5/sbin:$PATH"
+
+# NVM Setup
+export NVM_DIR="$HOME/.nvm"
+[ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"  # This loads nvm
+[ -s "$NVM_DIR/bash_completion" ] && \. "$NVM_DIR/bash_completion"  # This loads nvm bash_completion
+
+# Pyenv and Pyvirtualenv Setup
+export PYENV_ROOT="$HOME/.pyenv"
+export PATH="$PYENV_ROOT/bin:$PATH"
+eval "$(pyenv init --path)"
+eval "$(pyenv init -)"
+eval "$(pyenv virtualenv-init -)"
+######################################
+
+# ZSH STUFFFFFS Below
+
+# If you come from bash you might have to change your $PATH.
+# export PATH=$HOME/bin:/usr/local/bin:$PATH
+
+# Path to your oh-my-zsh installation.
+export ZSH="$HOME/.oh-my-zsh"
+
+# Set name of the theme to load --- if set to "random", it will
+# load a random theme each time oh-my-zsh is loaded, in which case,
+# to know which specific one was loaded, run: echo $RANDOM_THEME
+# See https://github.com/ohmyzsh/ohmyzsh/wiki/Themes
+ZSH_THEME="agnoster"
+
+# Set list of themes to pick from when loading at random
+# Setting this variable when ZSH_THEME=random will cause zsh to load
+# a theme from this variable instead of looking in $ZSH/themes/
+# If set to an empty array, this variable will have no effect.
+# ZSH_THEME_RANDOM_CANDIDATES=( "robbyrussell" "agnoster" )
+
+# Uncomment the following line to use case-sensitive completion.
+# CASE_SENSITIVE="true"
+
+# Uncomment the following line to use hyphen-insensitive completion.
+# Case-sensitive completion must be off. _ and - will be interchangeable.
+# HYPHEN_INSENSITIVE="true"
+
+# Uncomment one of the following lines to change the auto-update behavior
+# zstyle ':omz:update' mode disabled  # disable automatic updates
+# zstyle ':omz:update' mode auto      # update automatically without asking
+# zstyle ':omz:update' mode reminder  # just remind me to update when it's time
+
+# Uncomment the following line to change how often to auto-update (in days).
+# zstyle ':omz:update' frequency 13
+
+# Uncomment the following line if pasting URLs and other text is messed up.
+# DISABLE_MAGIC_FUNCTIONS="true"
+
+# Uncomment the following line to disable colors in ls.
+# DISABLE_LS_COLORS="true"
+
+# Uncomment the following line to disable auto-setting terminal title.
+# DISABLE_AUTO_TITLE="true"
+
+# Uncomment the following line to enable command auto-correction.
+# ENABLE_CORRECTION="true"
+
+# Uncomment the following line to display red dots whilst waiting for completion.
+# You can also set it to another string to have that shown instead of the default red dots.
+# e.g. COMPLETION_WAITING_DOTS="%F{yellow}waiting...%f"
+core/issues/76621
+  DEPRECATION: Configuring installation scheme with distutils config files is deprecated and will no longer work in the near future. If you are using a Homebrew or Linuxbrew Python, please see discussion at https://github.com/Homebrew/homebrew-core/issues/76621
+  DEPRECATION: Configuring installation scheme with distutils config files is deprecated and will no longer work in the near future. If you are using a Homebrew or Linuxbrew Python, please see discussion at https://github.com/Homebrew/homebrew-core/issues/76621
+  DEPRECATION: Configuring installation scheme with distutils config files is deprecated and will no longer work in the near future. If you are using a Homebrew or Linuxbrew Python, please see discussion at https://github.com/Homebrew/homebrew-core/issues/76621
+  DEPRECATION: Configuring installation scheme with distutils config files is deprecated and will no longer work in the near future. If you are using a Homebrew or Linuxbrew Python, please see discussion at https://github.com/Homebrew/homebrew-core/issues/76621
+  DEPRECATION: Configuring installation scheme with distutils config files is deprecated and will no longer work in the near future. If you are using a Homebrew or Linuxbrew Python, please see discussion at https://github.com/Homebrew/homebrew-core/issues/76621
+  DEPRECATION: Configuring installation scheme with distutils config files is deprecated and will no longer work in the near future. If you are using a Homebrew or Linuxbrew Python, please see discussion at https://github.com/Homebrew/homebrew-core/issues/76621
+  DEPRECATION: Configuring installation scheme with distutils config files is deprecated and will no longer work in the near future. If you are using a Homebrew or Linuxbrew Python, please see discussion at https://github.com/Homebrew/homebrew-core/issues/76621
+  DEPRECATION: Configuring installation scheme with distutils config files is deprecated and will no longer work in the near future. If you are using a Homebrew or Linuxbrew Python, please see discussion at https://github.com/Homebrew/homebrew-core/issues/76621
+  DEPRECATION: Configuring installation scheme with distutils config files is deprecated and will no longer work in the near future. If you are using a Homebrew or Linuxbrew Python, please see discussion at https://github.com/Homebrew/homebrew-core/issues/76621
+  DEPRECATION: Configuring installation scheme with distutils config files is deprecated and will no longer work in the near future. If you are using a Homebrew or Linuxbrew Python, please see discussion at https://github.com/Homebrew/homebrew-core/issues/76621
+  DEPRECATION: Configuring installation scheme with distutils config files is deprecated and will no longer work in the near future. If you are using a Homebrew or Linuxbrew Python, please see discussion at https://github.com/Homebrew/homebrew-core/issues/76621
+  DEPRECATION: Configuring installation scheme with distutils config files is deprecated and will no longer work in the near future. If you are using a Homebrew or Linuxbrew Python, please see discussion at https://github.com/Homebrew/homebrew-core/issues/76621
+  DEPRECATION: Configuring installation scheme with distutils config files is deprecated and will no longer work in the near future. If you are using a Homebrew or Linuxbrew Python, please see discussion at https://github.com/Homebrew/homebrew-core/issues/76621
+  DEPRECATION: Configuring installation scheme with distutils config files is deprecated and will no longer work in the near future. If you are using a Homebrew or Linuxbrew Python, please see discussion at https://github.com/Homebrew/homebrew-core/issues/76621
+  DEPRECATION: Configuring installation scheme with distutils config files is deprecated and will no longer work in the near future. If you are using a Homebrew or Linuxbrew Python, please see discussion at https://github.com/Homebrew/homebrew-core/issues/76621
+  DEPRECATION: Configuring installation scheme with distutils config files is deprecated and will no longer work in the near future. If you are using a Homebrew or Linuxbrew Python, please see discussion at https://github.com/Homebrew/homebrew-core/issues/76621
+  DEPRECATION: Configuring installation scheme with distutils config files is deprecated and will no longer work in the near future. If you are using a Homebrew or Linuxbrew Python, please see discussion at https://github.com/Homebrew/homebrew-core/issues/76621
+  DEPRECATION: Configuring installation scheme with distutils config files is deprecated and will no longer work in the near future. If you are using a Homebrew or Linuxbrew Python, please see discussion at https://github.com/Homebrew/homebrew-core/issues/76621
+  DEPRECATION: Configuring installation scheme with distutils config files is deprecated and will no longer work in the near future. If you are using a Homebrew or Linuxbrew Python, please see discussion at https://github.com/Homebrew/homebrew-core/issues/76621
+DEPRECATION: Configuring installation scheme with distutils config files is deprecated and will no longer work in the near future. If you are using a Homebrew or Linuxbrew Python, please see discussion at https://github.com/Homebrew/homebrew-core/issues/76621
+Successfully installed black-22.1.0 cfgv-3.3.1 click-8.0.3 distlib-0.3.4 filelock-3.4.2 flake8-4.0.1 flake8-docstrings-1.6.0 identify-2.4.7 mccabe-0.6.1 mypy-extensions-0.4.3 nodeenv-1.6.0 pathspec-0.9.0 platformdirs-2.4.1 pre-commit-2.17.0 pycodestyle-2.8.0 pydocstyle-6.1.1 pyflakes-2.4.0 pyyaml-6.0 snowballstemmer-2.2.0 toml-0.10.2 tomli-2.0.0 typing-extensions-4.0.1 virtualenv-20.13.0
+WARNING: You are using pip version 21.3.1; however, version 22.0.2 is available.
+You should consider upgrading via the '/opt/homebrew/opt/python@3.9/bin/python3.9 -m pip install --upgrade pip' command.
+
+...Finished Python installation checks.
+
+All done!
+ bm@BMs-MacBook-Pro  ~  ls
+Applications   Brewfile       Brewfile.local Desktop        Documents      Downloads      Library        Movies         Music          Pictures       Public         gandi.key      laptop.log     mac            repos
+ bm@BMs-MacBook-Pro  ~  which bash
+/bin/bash
+ bm@BMs-MacBook-Pro  ~  which $SHELL
+/bin/zsh
+ bm@BMs-MacBook-Pro  ~  vim ~/.zshrc
+ bm@BMs-MacBook-Pro  ~ 
+ bm@BMs-MacBook-Pro  ~  ls -lah
+total 416
+drwxr-x---+ 41 bm    staff   1.3K Oct 15 10:36 .
+drwxr-xr-x   5 root  admin   160B Jan 30  2022 ..
+-r--------   1 bm    staff     7B Jan 30  2022 .CFUserTextEncoding
+-rw-r--r--@  1 bm    staff    10K Sep 28 17:22 .DS_Store
+drwx------+  7 bm    staff   224B Jun 28 21:41 .Trash
+drwxr-xr-x   4 bm    staff   128B Feb  7  2022 .aws
+-rw-------   1 bm    staff     4B Feb  1  2022 .bash_history
+drwxr-xr-x   2 bm    staff    64B Feb  1  2022 .bin
+drwxr-xr-x   3 bm    staff    96B Jan 30  2022 .config
+drwxr-xr-x  10 bm    staff   320B Jun 28 20:52 .docker
+drwxr-xr-x   3 bm    staff    96B Apr 23 09:17 .ipython
+-rw-r--r--   1 bm    staff   597B Feb  1  2022 .laptop.local
+drwxr-xr-x  27 bm    staff   864B Feb  1  2022 .nvm
+drwxr-xr-x  22 bm    staff   704B Oct 14 23:37 .oh-my-zsh
+drwxr-xr-x   6 bm    staff   192B Feb  1  2022 .pyenv
+-rw-------   1 bm    staff   546B Mar 31  2022 .python_history
+drwx------   8 bm    staff   256B Oct  8 09:14 .ssh
+-rw-------   1 root  staff   1.8K Jan 30  2022 .viminfo
+drwxr-xr-x   4 bm    staff   128B Feb  1  2022 .vscode
+-rw-r--r--   1 bm    staff    47K Feb  1  2022 .zcompdump
+-rw-r--r--   1 bm    staff    47K Oct 14 23:37 .zcompdump-BM’s MacBook Pro-5.8
+-rw-r--r--   1 bm    staff    42B Feb  1  2022 .zprofile
+-rw-------   1 bm    staff    22K Oct 15 10:36 .zsh_history
+drwx------  11 bm    staff   352B Jan 30  2022 .zsh_sessions
+-rw-r--r--   1 bm    staff   4.5K Oct 15 10:35 .zshrc
+-rw-r--r--   1 bm    staff   662B Feb  7  2022 .zshrc.pre-oh-my-zsh
+drwx------@  3 bm    staff    96B Apr 21 12:29 Applications
+-rw-r--r--   1 bm    staff   724B Feb  1  2022 Brewfile
+-rw-r--r--   1 bm    staff   361B Feb  1  2022 Brewfile.local
+drwx------+  5 bm    staff   160B Jun 28 21:41 Desktop
+drwx------+  4 bm    staff   128B Mar 31  2022 Documents
+drwx------+ 15 bm    staff   480B Aug 22 01:08 Downloads
+drwx------@ 84 bm    staff   2.6K Jun 28 21:35 Library
+drwx------   4 bm    staff   128B Feb  7  2022 Movies
+drwx------+  3 bm    staff    96B Jan 30  2022 Music
+drwx------+  5 bm    staff   160B Mar 28  2022 Pictures
+drwxr-xr-x+  4 bm    staff   128B Jan 30  2022 Public
+-rw-r--r--   1 bm    staff    25B Oct  8 09:34 gandi.key
+-rw-r--r--   1 bm    staff    17K Feb  1  2022 laptop.log
+-rw-r--r--   1 bm    staff   8.0K Feb  1  2022 mac
+drwxr-xr-x   5 bm    staff   160B Sep 13 22:28 repos
+ bm@BMs-MacBook-Pro  ~  ls
+Applications   Brewfile       Brewfile.local Desktop        Documents      Downloads      Library        Movies         Music          Pictures       Public         gandi.key      laptop.log     mac            repos
+ bm@BMs-MacBook-Pro  ~  cd repos
+ bm@BMs-MacBook-Pro  ~/repos  ls
+bmaca      signal-cli tsatista
+ bm@BMs-MacBook-Pro  ~/repos  cd bmaca
+ bm@BMs-MacBook-Pro  ~/repos/bmaca  ls
+CTA             bmaca.github.io bots            mtb-notifier
+ bm@BMs-MacBook-Pro  ~/repos/bmaca  git clone git@github.com:bmaca/laptop.git
+Cloning into 'laptop'...
+remote: Enumerating objects: 821, done.
+remote: Counting objects: 100% (21/21), done.
+remote: Compressing objects: 100% (12/12), done.
+remote: Total 821 (delta 9), reused 16 (delta 9), pack-reused 800
+Receiving objects: 100% (821/821), 237.73 KiB | 2.45 MiB/s, done.
+Resolving deltas: 100% (450/450), done.
+ bm@BMs-MacBook-Pro  ~/repos/bmaca 
+ bm@BMs-MacBook-Pro  ~/repos/bmaca  ls
+CTA             bmaca.github.io bots            laptop          mtb-notifier
+ bm@BMs-MacBook-Pro  ~/repos/bmaca  cd laptop
+ bm@BMs-MacBook-Pro  ~/repos/bmaca/laptop   master  ls
+Brewfile          Brewfile.local    CONTRIBUTING.md   ISSUE_TEMPLATE.md LICENSE.md        README.md         laptop            mac
+ bm@BMs-MacBook-Pro  ~/repos/bmaca/laptop   master  cat mac
+#!/bin/bash
+
+# Welcome to the cisagov laptop script!
+# Be prepared to turn your laptop (or desktop)
+# into an awesome development machine.
+
+fancy_echo() {
+  # shellcheck disable=SC2039
+  local fmt="$1"; shift
+
+  # shellcheck disable=SC2059
+  printf "\n$fmt\n" "$@"
+}
+
+append_to_file() {
+  # shellcheck disable=SC2039
+  local file="$1"
+  # shellcheck disable=SC2039
+  local text="$2"
+
+  if [ "$file" = "$HOME/.zshrc" ]; then
+    if [ -w "$HOME/.zshrc.local" ]; then
+      file="$HOME/.zshrc.local"
+    else
+      file="$HOME/.zshrc"
+    fi
+  fi
+
+  if ! grep -qs "^$text$" "$file"; then
+    printf "\n%s\n" "$text" >> "$file"
+  fi
+}
+
+append_to_shell_file() {
+  append_to_file "$shell_file" "$1"
+}
+
+create_and_set_shell_file() {
+  shell_file="$1"
+  if [ ! -f "$shell_file" ]; then
+    touch "$shell_file"
+  fi
+}
+
+create_zshrc_and_set_it_as_shell_file() {
+  create_and_set_shell_file "$HOME/.zshrc"
+}
+
+create_bash_profile_and_set_it_as_shell_file() {
+  create_and_set_shell_file "$HOME/.bash_profile"
+}
+
+# shellcheck disable=SC2154
+trap 'ret=$?; test $ret -ne 0 && printf "failed\n\n" >&2; exit $ret' EXIT
+
+set -e
+
+if [ ! -d "$HOME/.bin/" ]; then
+  mkdir "$HOME/.bin"
+fi
+
+case "$SHELL" in
+  */zsh) :
+    create_zshrc_and_set_it_as_shell_file
+    ;;
+  *)
+    create_bash_profile_and_set_it_as_shell_file
+    if [ -z "$CI" ]; then
+      bold=$(tput bold)
+      normal=$(tput sgr0)
+      echo "Want to switch your shell from the default ${bold}bash${normal} to ${bold}zsh${normal}?"
+      echo "Both work fine for development, and ${bold}zsh${normal} has some extra "
+      echo "features for customization and tab completion."
+      echo "If you aren't sure or don't care, we recommend ${bold}zsh${normal}."
+      echo "Note that you can always switch back to ${bold}bash${normal} if you change your mind."
+      echo "Please see the README for instructions."
+      echo -n "Press ${bold}y${normal} to switch to zsh, ${bold}n${normal} to keep bash: "
+      read -r -n 1 response
+      if [ "$response" = "y" ]; then
+        create_zshrc_and_set_it_as_shell_file
+        if grep "$(command -v zsh)" > /dev/null 2>&1 < /etc/shells; then
+          fancy_echo "=== Getting ready to change your shell to zsh. Please enter your password to continue. ==="
+          echo "=== Note that there won't be visual feedback when you type your password. Type it slowly and press return. ==="
+          echo "=== Press control-c to cancel ==="
+          chsh -s "$(command -v zsh)"
+        else
+          printf "\n\n"
+          echo "Can't switch shells automatically in this case.  The path to zsh isn't in"
+          echo "the list of allowed shells.  To manually switch to zsh, enter the following"
+          echo "two lines into your terminal (in another tab, or when this script is done):"
+          echo ""
+          echo "sudo echo \"\$(command -v zh)\" >> /etc/shells"
+          echo "chsh -s \"\$(command -v zs)\""
+          sleep 3
+        fi
+      else
+        fancy_echo "Shell will not be changed."
+      fi
+    else
+      fancy_echo "CI System detected, will not change shells"
+    fi
+    ;;
+esac
+
+brew_is_installed() {
+  brew list -1 | grep -Fqx "$1"
+}
+
+tap_is_installed() {
+  brew tap | grep -Fqx "$1"
+}
+
+# Main Execution
+laptop_script_url="https://raw.githubusercontent.com/cisagov/laptop/master/laptop"
+
+append_to_shell_file "# Added by cisagov laptop script"
+append_to_shell_file "alias laptop='bash <(curl -s $laptop_script_url)'"
+# shellcheck disable=SC2016
+append_to_shell_file 'export PATH="$HOME/.bin:$PATH"'
+
+# Install Homebrew
+if ! command -v brew >/dev/null; then
+  fancy_echo "Installing Homebrew ..."
+  /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/master/install.sh)"
+
+  # shellcheck disable=SC2016
+  append_to_shell_file 'export PATH="/usr/local/bin:$PATH"'
+else
+  fancy_echo "Homebrew already installed. Skipping ..."
+fi
+
+# Update Homebrew
+fancy_echo "Updating Homebrew..."
+brew update
+
+# Verify Homebrew installation
+fancy_echo "Verifying the Homebrew installation..."
+if brew doctor; then
+  fancy_echo "Your Homebrew installation is good to go."
+else
+  fancy_echo "Your Homebrew installation reported some errors or warnings."
+  echo "If the warnings are related to Python, you can ignore them."
+  echo "Otherwise, review the Homebrew messages to see if any action is needed."
+fi
+
+# Install from Brewfile
+fancy_echo "Installing formulas and casks from the Brewfile ..."
+if brew bundle --file="$HOME/Brewfile"; then
+  fancy_echo "All formulas and casks were installed successfully."
+else
+  fancy_echo "Some formulas or casks failed to install."
+  echo "This is usually due to one of the Mac apps being already installed,"
+  echo "in which case, you can ignore these errors."
+fi
+
+# Install MIT kerberos via Brew
+if ! brew_is_installed "krb5"; then
+  fancy_echo "Installing MIT Kerberos"
+  brew install krb5
+  # shellcheck disable=SC2016
+  append_to_shell_file 'export PATH="/usr/local/opt/krb5/bin:/usr/local/opt/krb5/sbin:$PATH"'
+else
+  fancy_echo "MIT Kerberos already installed"
+fi
+
+# Install Node/NVM
+fancy_echo 'Checking on Node.js installation...'
+
+if ! brew_is_installed "node"; then
+  if command -v n > /dev/null; then
+    fancy_echo "We recommend using \`nvm\` and not \`n\`."
+    fancy_echo "See https://pages.18f.gov/frontend/#install-npm"
+  elif ! command -v nvm > /dev/null; then
+    fancy_echo 'Installing nvm and lts Node.js and npm...'
+    curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.35.3/install.sh | bash
+    export NVM_DIR="$HOME/.nvm"
+    # shellcheck source=/dev/null
+    [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
+    # nvm is a bash script itself, some commands of which may fail WITHOUT
+    # causing the whole operation to fail. To accomdate that, disable exit on
+    # any nonzero exit code while nvm runs.
+    set +e
+
+    nvm install --lts
+
+    # Turn it back on when nvm is done, since the rest of this script may have
+    # been written assuming this behavior.
+    set -e
+  else
+    fancy_echo 'version manager detected.  Skipping...'
+  fi
+else
+  brew bundle --file=- <<EOF
+  brew 'node'
+EOF
+fi
+
+fancy_echo '...Finished Node.js installation checks.'
+
+# Install and set up Python
+fancy_echo 'Checking on Python installation...'
+#!/bin/bash
+
+# Welcome to the cisagov laptop script!
+# Be prepared to turn your laptop (or desktop)
+# into an awesome development machine.
+
+fancy_echo() {
+  # shellcheck disable=SC2039
+  local fmt="$1"; shift
+
+  # shellcheck disable=SC2059
+  printf "\n$fmt\n" "$@"
+}
+
+append_to_file() {
+  # shellcheck disable=SC2039
+  local file="$1"
+  # shellcheck disable=SC2039
+  local text="$2"
+
+  if [ "$file" = "$HOME/.zshrc" ]; then
+    if [ -w "$HOME/.zshrc.local" ]; then
+      file="$HOME/.zshrc.local"
+    else
+      file="$HOME/.zshrc"
+    fi
+  fi
+
+  if ! grep -qs "^$text$" "$file"; then
+    printf "\n%s\n" "$text" >> "$file"
+  fi
+}
+
+append_to_shell_file() {
+  append_to_file "$shell_file" "$1"
+}
+
+create_and_set_shell_file() {
+  shell_file="$1"
+  if [ ! -f "$shell_file" ]; then
+    touch "$shell_file"
+  fi
+}
+
+create_zshrc_and_set_it_as_shell_file() {
+  create_and_set_shell_file "$HOME/.zshrc"
+}
+
+create_bash_profile_and_set_it_as_shell_file() {
+  create_and_set_shell_file "$HOME/.bash_profile"
+}
+
+# shellcheck disable=SC2154
+trap 'ret=$?; test $ret -ne 0 && printf "failed\n\n" >&2; exit $ret' EXIT
+
+set -e
+/br
+      read -r -n 1 response
+
+if ! brew_is_installed "python3"; then
+  brew bundle --file=- <<EOF
+  brew 'zlib'
+  brew 'pyenv'
+  brew 'pyenv-virtualenv'
+  brew 'pyenv-virtualenvwrapper'
+EOF
+  # shellcheck disable=SC2016
+  append_to_shell_file 'if which pyenv > /dev/null; then eval "$(pyenv init -)"; fi'
+  # shellcheck disable=SC2016
+  append_to_shell_file 'if which pyenv-virtualenv-init > /dev/null; then eval "$(pyenv virtualenv-init -)"; fi'
+
+  # pyenv currently doesn't have a convenience version to use, e.g., "latest",
+  # so we check for the latest version against Homebrew instead.
+  latest_python_3="$(brew info python3 | grep -E -o "3\.\d+\.\d+" | head -1)"
+
+  if ! pyenv versions | ag "$latest_python_3" > /dev/null; then
+    # Starting with macOS 10.14 (Mojave), the header files for system libraries
+    # have been moved. Rather than hack the header paths based on OS version,
+    # just install zlib with brew and build against that directly for now.
+    brew install zlib
+    export LDFLAGS="-L/usr/local/opt/zlib/lib"
+    export CPPFLAGS="-I/usr/local/opt/zlib/include"
+    pyenv install "$latest_python_3"
+    pyenv global "$latest_python_3"
+    pyenv rehash
+  fi
+else
+  brew bundle --file=- <<EOF
+  brew 'python3'
+EOF
+fi
+
+if ! brew_is_installed "pyenv-virtualenvwrapper"; then
+  if ! pip3 list | ag "virtualenvwrapper" > /dev/null; then
+    fancy_echo 'Installing virtualenvwrapper...'
+    pip3 install virtualenvwrapper
+# This is Git's per-user configuration file.
+    append_to_shell_file 'export VIRTUALENVWRAPPER_PYTHON=/usr/local/bin/python3'
+Laptop
+    append_to_shell_file 'export VIRTUALENVWRAPPER_VIRTUALENV=/usr/local/bin/virtualenv'
+    append_to_shell_file 'source /usr/local/bin/virtualenvwrapper.sh'
+  fi
+fi
+
+fancy_echo "Install pre-commit hooks for linters and black"
+pip3 install pre-commit flake8 flake8-docstrings black
+
+fancy_echo '...Finished Python installation checks.'
+
+if [ -f "$HOME/.laptop.local" ]; then
+  # shellcheck source=/dev/null
+  . "$HOME/.laptop.local"
+fi
+
+Laptop
+fancy_echo 'All done!'
+ bm@BMs-MacBook-Pro  ~/repos/bmaca/laptop   master  vim mac
+ bm@BMs-MacBook-Pro  ~/repos/bmaca/laptop   master ±  git status
+On branch master
+Your branch is up to date with 'origin/master'.
+
+Changes not staged for commit:
+  (use "git add <file>..." to update what will be committed)
+  (use "git restore <file>..." to discard changes in working directory)
+	modified:   mac
+
+no changes added to commit (use "git add" and/or "git commit -a")
+ bm@BMs-MacBook-Pro  ~/repos/bmaca/laptop   master ±  git add .
+ bm@BMs-MacBook-Pro  ~/repos/bmaca/laptop   master ✚  git commit -m "fix some mangling with grep"
+[master d33e00b] fix some mangling with grep
+ Committer: BM <bm@BMs-MacBook-Pro.local>
+Your name and email address were configured automatically based
+Laptop
+on your username and hostname. Please check that they are accurate.
+You can suppress this message by setting them explicitly. Run the
+following command and follow the instructions in your editor to edit
+your configuration file:
+
+    git config --global --edit
+
+After doing this, you may fix the identity used for this commit with:
+
+    git commit --amend --reset-author
+
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+ bm@BMs-MacBook-Pro  ~/repos/bmaca/laptop   master  git push
+Enumerating objects: 5, done.
+Counting objects: 100% (5/5), done.
+Delta compression using up to 10 threads
+Compressing objects: 100% (3/3), done.
+Writing objects: 100% (3/3), 298 bytes | 298.00 KiB/s, done.
+Total 3 (delta 2), reused 0 (delta 0), pack-reused 0
+remote: Resolving deltas: 100% (2/2), completed with 2 local objects.
+To github.com:bmaca/laptop.git
+   af06072..d33e00b  master -> master
+ bm@BMs-MacBook-Pro  ~/repos/bmaca/laptop   master  git config --global --edit
+ bm@BMs-MacBook-Pro  ~/repos/bmaca/laptop   master  vim README.md
+ bm@BMs-MacBook-Pro  ~/repos/bmaca/laptop   master ±  git add .
+ bm@BMs-MacBook-Pro  ~/repos/bmaca/laptop   master ✚  git commit -m "hrm"
+[master 05d933e] hrm
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+ bm@BMs-MacBook-Pro  ~/repos/bmaca/laptop   master  git push
+Enumerating objects: 5, done.
+Counting objects: 100% (5/5), done.
+Delta compression using up to 10 threads
+Compressing objects: 100% (3/3), done.
+Writing objects: 100% (3/3), 278 bytes | 278.00 KiB/s, done.
+Total 3 (delta 2), reused 0 (delta 0), pack-reused 0
+remote: Resolving deltas: 100% (2/2), completed with 2 local objects.
+To github.com:bmaca/laptop.git
+   d33e00b..05d933e  master -> master
+ bm@BMs-MacBook-Pro  ~/repos/bmaca/laptop   master  vim README.md
+ bm@BMs-MacBook-Pro  ~/repos/bmaca/laptop   master ±  git add .
+ bm@BMs-MacBook-Pro  ~/repos/bmaca/laptop   master ✚  git commit -m "add myuname"
+[master 020aaee] add myuname
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+ bm@BMs-MacBook-Pro  ~/repos/bmaca/laptop   master  gitp push
+zsh: command not found: gitp
+ ✘ bm@BMs-MacBook-Pro  ~/repos/bmaca/laptop   master  git push
+Enumerating objects: 5, done.
+Counting objects: 100% (5/5), done.
+Delta compression using up to 10 threads
+Compressing objects: 100% (3/3), done.
+Writing objects: 100% (3/3), 292 bytes | 292.00 KiB/s, done.
+Total 3 (delta 2), reused 0 (delta 0), pack-reused 0
+remote: Resolving deltas: 100% (2/2), completed with 2 local objects.
+To github.com:bmaca/laptop.git
+   05d933e..020aaee  master -> master
+ bm@BMs-MacBook-Pro  ~/repos/bmaca/laptop   master  vim README.md
+ bm@BMs-MacBook-Pro  ~/repos/bmaca/laptop   master ±  git add .
+ bm@BMs-MacBook-Pro  ~/repos/bmaca/laptop   master ✚  git commit -m "add myuname to copy"
+[master a4a13e1] add myuname to copy
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+ bm@BMs-MacBook-Pro  ~/repos/bmaca/laptop   master  git push
+Enumerating objects: 5, done.
+Counting objects: 100% (5/5), done.
+Delta compression using up to 10 threads
+Compressing objects: 100% (3/3), done.
+Writing objects: 100% (3/3), 296 bytes | 296.00 KiB/s, done.
+Total 3 (delta 2), reused 0 (delta 0), pack-reused 0
+remote: Resolving deltas: 100% (2/2), completed with 2 local objects.
+To github.com:bmaca/laptop.git
+   020aaee..a4a13e1  master -> master
+ bm@BMs-MacBook-Pro  ~/repos/bmaca/laptop   master  code .
+ bm@BMs-MacBook-Pro  ~/repos/bmaca/laptop   master  git add .
+ bm@BMs-MacBook-Pro  ~/repos/bmaca/laptop   master ✚  git commit -m "tests"
+[master ae5767d] tests
+ 1 file changed, 5 insertions(+)
+ bm@BMs-MacBook-Pro  ~/repos/bmaca/laptop   master  git push
+Enumerating objects: 5, done.
+Counting objects: 100% (5/5), done.
+Delta compression using up to 10 threads
+Compressing objects: 100% (3/3), done.
+Writing objects: 100% (3/3), 353 bytes | 353.00 KiB/s, done.
+Total 3 (delta 2), reused 0 (delta 0), pack-reused 0
+remote: Resolving deltas: 100% (2/2), completed with 2 local objects.
+To github.com:bmaca/laptop.git
+   a4a13e1..ae5767d  master -> master
+ bm@BMs-MacBook-Pro  ~/repos/bmaca/laptop   master  pyenv versions
+  system
+  3.10.0
+  3.10.0/envs/collector
+  3.10.0/envs/py-310
+* 3.9.10 (set by /Users/bm/.pyenv/version)
+  collector
+  py-310
+ bm@BMs-MacBook-Pro  ~/repos/bmaca/laptop   master  git add .
+ bm@BMs-MacBook-Pro  ~/repos/bmaca/laptop   master ✚  git commit -m "tests"
+[master da7d2f1] tests
+# unset pager
+ 1 file changed, 3 insertions(+), 1 deletion(-)
+# unset pager
+# Added by cisagov laptop script
+################################
+alias laptop='bash <(curl -s https://raw.githubusercontent.com/cisagov/laptop/master/laptop)'
+
+export PATH="$HOME/.bin:$PATH"
+
+export PATH="/usr/local/bin:$PATH"
+
+export PATH="/usr/local/opt/krb5/bin:/usr/local/opt/krb5/sbin:$PATH"
+
+# NVM Setup
+export NVM_DIR="$HOME/.nvm"
+[ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"  # This loads nvm
+[ -s "$NVM_DIR/bash_completion" ] && \. "$NVM_DIR/bash_completion"  # This loads nvm bash_completion
+
+# Pyenv and Pyvirtualenv Setup
+export PYENV_ROOT="$HOME/.pyenv"
+export PATH="$PYENV_ROOT/bin:$PATH"
+eval "$(pyenv init --path)"
+eval "$(pyenv init -)"
+eval "$(pyenv virtualenv-init -)"
+######################################
