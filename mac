@@ -103,7 +103,7 @@ case "$SHELL" in
 esac
 
 brew_is_installed() {
-  brew list -1 | grep -Fqx "$1"
+  brew list -1 | grep -i "$1"
 }
 
 tap_is_installed() {
