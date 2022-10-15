@@ -221,13 +221,18 @@ EOF
     # have been moved. Rather than hack the header paths based on OS version,
     # just install zlib with brew and build against that directly for now.
     brew install zlib
+    fancy_echo "ldflag"
     export LDFLAGS="-L/usr/local/opt/zlib/lib"
+    fancy_echo "ldflag"
     export CPPFLAGS="-I/usr/local/opt/zlib/include"
+    fancy_echo "pyenv install"
     pyenv install "$latest_python_3"
+    pyenv install "globals"
     pyenv global "$latest_python_3"
     pyenv rehash
   fi
 else
+  fancy_echo "hrmm"
   brew bundle --file=- <<EOF
   brew 'python3'
 EOF
