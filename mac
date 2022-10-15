@@ -198,46 +198,46 @@ fi
 fancy_echo '...Finished Node.js installation checks.'
 
 # Install and set up Python
-# fancy_echo 'Checking on Python installation...'
+fancy_echo 'Checking on Python installation...'
 
-# if ! brew_is_installed "python3"; then
-#   brew bundle --file=- <<EOF
-#   brew 'zlib'
-#   brew 'pyenv'
-#   brew 'pyenv-virtualenv'
-#   brew 'pyenv-virtualenvwrapper'
-# EOF
-#   # shellcheck disable=SC2016
-#   append_to_shell_file 'if which pyenv > /dev/null; then eval "$(pyenv init -)"; fi'
-#   # shellcheck disable=SC2016
-#   append_to_shell_file 'if which pyenv-virtualenv-init > /dev/null; then eval "$(pyenv virtualenv-init -)"; fi'
+if ! brew_is_installed "python3"; then
+  brew bundle --file=- <<EOF
+  brew 'zlib'
+  brew 'pyenv'
+  brew 'pyenv-virtualenv'
+  brew 'pyenv-virtualenvwrapper'
+EOF
+  # shellcheck disable=SC2016
+  append_to_shell_file 'if which pyenv > /dev/null; then eval "$(pyenv init -)"; fi'
+  # shellcheck disable=SC2016
+  append_to_shell_file 'if which pyenv-virtualenv-init > /dev/null; then eval "$(pyenv virtualenv-init -)"; fi'
 
-#   # pyenv currently doesn't have a convenience version to use, e.g., "latest",
-#   # so we check for the latest version against Homebrew instead.
-#   # latest_python_3="$(brew info python3 | grep -E -o "3\.\d+\.\d+" | head -1)"
-#   latest_python_3="3.10.7"
+  # pyenv currently doesn't have a convenience version to use, e.g., "latest",
+  # so we check for the latest version against Homebrew instead.
+  # latest_python_3="$(brew info python3 | grep -E -o "3\.\d+\.\d+" | head -1)"
+  latest_python_3="3.10.7"
 
-#   if ! pyenv versions | ag "$latest_python_3" > /dev/null; then
-#     # Starting with macOS 10.14 (Mojave), the header files for system libraries
-#     # have been moved. Rather than hack the header paths based on OS version,
-#     # just install zlib with brew and build against that directly for now.
-#     brew install zlib
-#     fancy_echo "ldflag"
-#     export LDFLAGS="-L/usr/local/opt/zlib/lib"
-#     fancy_echo "ldflag"
-#     export CPPFLAGS="-I/usr/local/opt/zlib/include"
-#     fancy_echo "pyenv install"
-#     pyenv install "$latest_python_3"
-#     pyenv install "globals"
-#     pyenv global "$latest_python_3"
-#     pyenv rehash
-#   fi
-# else
-#   fancy_echo "hrmm"
-#   brew bundle --file=- <<EOF
-#   brew 'python3'
-# EOF
-# fi
+  if ! pyenv versions | ag "$latest_python_3" > /dev/null; then
+    # Starting with macOS 10.14 (Mojave), the header files for system libraries
+    # have been moved. Rather than hack the header paths based on OS version,
+    # just install zlib with brew and build against that directly for now.
+    brew install zlib
+    fancy_echo "ldflag"
+    export LDFLAGS="-L/usr/local/opt/zlib/lib"
+    fancy_echo "ldflag"
+    export CPPFLAGS="-I/usr/local/opt/zlib/include"
+    fancy_echo "pyenv install"
+    pyenv install "$latest_python_3"
+    pyenv install "globals"
+    pyenv global "$latest_python_3"
+    pyenv rehash
+  fi
+else
+  fancy_echo "hrmm"
+  brew bundle --file=- <<EOF
+  brew 'python3'
+EOF
+fi
 
 if ! brew_is_installed "pyenv-virtualenvwrapper"; then
   fancy_echo "interesting"
