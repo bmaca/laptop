@@ -214,7 +214,8 @@ EOF
 
   # pyenv currently doesn't have a convenience version to use, e.g., "latest",
   # so we check for the latest version against Homebrew instead.
-  latest_python_3="$(brew info python3 | grep -E -o "3\.\d+\.\d+" | head -1)"
+  # latest_python_3="$(brew info python3 | grep -E -o "3\.\d+\.\d+" | head -1)"
+  latest_python_3="3.10.7"
 
   if ! pyenv versions | ag "$latest_python_3" > /dev/null; then
     # Starting with macOS 10.14 (Mojave), the header files for system libraries
@@ -239,6 +240,7 @@ EOF
 fi
 
 if ! brew_is_installed "pyenv-virtualenvwrapper"; then
+  fancy_echo "interesting"
   if ! pip3 list | ag "virtualenvwrapper" > /dev/null; then
     fancy_echo 'Installing virtualenvwrapper...'
     pip3 install virtualenvwrapper
