@@ -20,7 +20,7 @@ Older versions may work but aren't regularly tested. Bug reports for older
 versions are welcome.
 
 Install
--------
+--------
 
 Begin by opening the Terminal application on your Mac. The easiest way to open
 an application in OS X is to search for it via [Spotlight]. The default
